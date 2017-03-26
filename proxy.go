@@ -17,9 +17,7 @@ func NewProxyServer(cfg Proxy) *Proxy {
 	var bs []byte
 
 	if len(cfg.Password) != 0 {
-		h := sha1.New()
-		h.Write([]byte(cfg.Password))
-		bs = h.Sum(nil)
+		bs = encode(cfg.Password)
 	} else {
 		bs = cfg.Password
 	}
@@ -33,20 +31,24 @@ func NewProxyServer(cfg Proxy) *Proxy {
 }
 
 func (p *Proxy) Start() error {
-	log.Println("Starting the server...")
-
 	listen, err := net.Listen("tcp", p.From)
 	check(err)
+	defer listen.Close()
+
+	log.Println("Starting the server on port", p.From[1:], "forward to", p.To[1:])
 
 	for {
 		conn, err := listen.Accept()
 		check(err)
+		defer conn.Close()
 
 		go p.newClient(conn)
 	}
 }
 
 func (p *Proxy) newClient(conn net.Conn) {
+	defer conn.Close()
+
 	buf := make([]byte, 10240)
 
 	if len(p.Password) != 0 {
@@ -54,16 +56,16 @@ func (p *Proxy) newClient(conn net.Conn) {
 		check(err)
 
 		if n > 0 {
-			h := sha1.New()
-			h.Write(bytes.Trim(buf, "\x00"))
-			bs := h.Sum(nil)
+			bs := encode(bytes.Trim(buf, "\x00"))
 
 			if !bytes.Equal(bs, p.Password) {
-				conn.Close()
+				incorrectPass(conn)
+
 				return
 			}
 		} else {
-			conn.Close()
+			incorrectPass(conn)
+
 			return
 		}
 	}
@@ -74,6 +76,7 @@ func (p *Proxy) newClient(conn net.Conn) {
 
 	target, err := net.Dial("tcp", p.To)
 	check(err)
+	defer target.Close()
 
 	for {
 		buf = make([]byte, 10240)
@@ -102,4 +105,21 @@ func check(err error) {
 	if err != nil {
 		log.Panic(err)
 	}
+}
+
+func incorrectPass(conn net.Conn) {
+	_, err := conn.Write([]byte("Incorrect password, connection close"))
+	check(err)
+
+	conn.Close()
+
+	return
+}
+
+func encode(pass []byte) []byte {
+	h := sha1.New()
+	h.Write(pass)
+	bs := h.Sum(nil)
+
+	return bs
 }
