@@ -5,7 +5,12 @@ import (
 )
 
 func main() {
-	server := proxy.NewProxy(":3333", ":9999")
+	cfg := proxy.Proxy{
+		From:    ":3333",
+		To:      ":9999",
+		Logging: true,
+	}
+	server := proxy.NewProxyServer(cfg)
 
 	server.Start()
 }
