@@ -35,7 +35,9 @@ func (p *Proxy) Start() error {
 	check(err)
 	defer listen.Close()
 
-	log.Println("Starting the server on port", p.From[1:], "forward to", p.To[1:])
+	if p.Logging {
+		log.Println("Starting the server on port", p.From[1:], "forwarding to", p.To[1:])
+	}
 
 	for {
 		conn, err := listen.Accept()
@@ -53,7 +55,13 @@ func (p *Proxy) newClient(conn net.Conn) {
 
 	if len(p.Password) != 0 {
 		n, err := conn.Read(buf)
-		check(err)
+		if _, ok := err.(net.Error); ok {
+			closeConnection(conn, p.Logging)
+
+			return
+		} else {
+			check(err)
+		}
 
 		if n > 0 {
 			bs := encode(bytes.Trim(buf, "\x00"))
@@ -75,14 +83,26 @@ func (p *Proxy) newClient(conn net.Conn) {
 	}
 
 	target, err := net.Dial("tcp", p.To)
-	check(err)
+	if _, ok := err.(net.Error); ok {
+		closeConnection(target, p.Logging)
+
+		return
+	} else {
+		check(err)
+	}
 	defer target.Close()
 
 	for {
 		buf = make([]byte, 10240)
 
 		n, err := conn.Read(buf)
-		check(err)
+		if _, ok := err.(net.Error); ok {
+			closeConnection(conn, p.Logging)
+
+			return
+		} else {
+			check(err)
+		}
 
 		buf = bytes.Trim(buf, "\x00")
 
@@ -96,9 +116,23 @@ func (p *Proxy) newClient(conn net.Conn) {
 			}
 
 			_, err = target.Write(buf)
-			check(err)
+			if _, ok := err.(net.Error); ok {
+				closeConnection(target, p.Logging)
+
+				return
+			} else {
+				check(err)
+			}
 		}
 	}
+}
+
+func closeConnection(conn net.Conn, logging bool) {
+	if logging {
+		log.Println(conn.RemoteAddr(), "close connection")
+	}
+
+	conn.Close()
 }
 
 func check(err error) {
@@ -112,8 +146,6 @@ func incorrectPass(conn net.Conn) {
 	check(err)
 
 	conn.Close()
-
-	return
 }
 
 func encode(pass []byte) []byte {
