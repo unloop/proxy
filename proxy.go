@@ -1,21 +1,34 @@
 package proxy
 
 import (
+	"bytes"
+	"crypto/sha1"
 	"log"
 	"net"
-	"bytes"
 )
 
 type Proxy struct {
 	From, To string
 	Logging  bool
+	Password []byte
 }
 
 func NewProxyServer(cfg Proxy) *Proxy {
+	var bs []byte
+
+	if len(cfg.Password) != 0 {
+		h := sha1.New()
+		h.Write([]byte(cfg.Password))
+		bs = h.Sum(nil)
+	} else {
+		bs = cfg.Password
+	}
+
 	return &Proxy{
-		From:    cfg.From,
-		To:      cfg.To,
-		Logging: cfg.Logging,
+		From:     cfg.From,
+		To:       cfg.To,
+		Logging:  cfg.Logging,
+		Password: bs,
 	}
 }
 
@@ -34,6 +47,27 @@ func (p *Proxy) Start() error {
 }
 
 func (p *Proxy) newClient(conn net.Conn) {
+	buf := make([]byte, 10240)
+
+	if len(p.Password) != 0 {
+		n, err := conn.Read(buf)
+		check(err)
+
+		if n > 0 {
+			h := sha1.New()
+			h.Write(bytes.Trim(buf, "\x00"))
+			bs := h.Sum(nil)
+
+			if !bytes.Equal(bs, p.Password) {
+				conn.Close()
+				return
+			}
+		} else {
+			conn.Close()
+			return
+		}
+	}
+
 	if p.Logging {
 		log.Println("New client", conn.RemoteAddr())
 	}
@@ -41,22 +75,25 @@ func (p *Proxy) newClient(conn net.Conn) {
 	target, err := net.Dial("tcp", p.To)
 	check(err)
 
-	buf := make([]byte, 10240)
-
 	for {
+		buf = make([]byte, 10240)
+
 		n, err := conn.Read(buf)
 		check(err)
+
 		buf = bytes.Trim(buf, "\x00")
 
 		if n > 0 {
 			if p.Logging {
-				log.Print("Message ", string(buf),
+				log.Print(
+					"Message ", string(bytes.Trim(buf, "\x00")),
 					" received from ", conn.RemoteAddr(),
 					" forwarded to ", target.RemoteAddr(),
 				)
 			}
 
-			target.Write(buf)
+			_, err = target.Write(buf)
+			check(err)
 		}
 	}
 }

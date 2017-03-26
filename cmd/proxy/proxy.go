@@ -6,9 +6,10 @@ import (
 
 func main() {
 	cfg := proxy.Proxy{
-		From:    ":3333",
-		To:      ":9999",
-		Logging: true,
+		From:     ":3333",
+		To:       ":9999",
+		Logging:  true,
+		Password: []byte("password"),
 	}
 	server := proxy.NewProxyServer(cfg)
 
