@@ -11,6 +11,7 @@ type Proxy struct {
 	From, To string
 	Logging  bool
 	Password []byte
+	BufSize  int64
 }
 
 func NewProxyServer(cfg Proxy) *Proxy {
@@ -33,7 +34,6 @@ func NewProxyServer(cfg Proxy) *Proxy {
 func (p *Proxy) Start() error {
 	listen, err := net.Listen("tcp", p.From)
 	check(err)
-	defer listen.Close()
 
 	if p.Logging {
 		log.Println("Starting the server on port", p.From[1:], "forwarding to", p.To[1:])
@@ -42,26 +42,17 @@ func (p *Proxy) Start() error {
 	for {
 		conn, err := listen.Accept()
 		check(err)
-		defer conn.Close()
 
 		go p.newClient(conn)
 	}
 }
 
 func (p *Proxy) newClient(conn net.Conn) {
-	defer conn.Close()
-
-	buf := make([]byte, 10240)
+	buf := make([]byte, p.BufSize)
 
 	if len(p.Password) != 0 {
 		n, err := conn.Read(buf)
-		if _, ok := err.(net.Error); ok {
-			closeConnection(conn, p.Logging)
-
-			return
-		} else {
-			check(err)
-		}
+		check(err)
 
 		if n > 0 {
 			bs := encode(bytes.Trim(buf, "\x00"))
@@ -83,26 +74,13 @@ func (p *Proxy) newClient(conn net.Conn) {
 	}
 
 	target, err := net.Dial("tcp", p.To)
-	if _, ok := err.(net.Error); ok {
-		closeConnection(target, p.Logging)
-
-		return
-	} else {
-		check(err)
-	}
-	defer target.Close()
+	check(err)
 
 	for {
-		buf = make([]byte, 10240)
+		buf = make([]byte, p.BufSize)
 
 		n, err := conn.Read(buf)
-		if _, ok := err.(net.Error); ok {
-			closeConnection(conn, p.Logging)
-
-			return
-		} else {
-			check(err)
-		}
+		check(err)
 
 		buf = bytes.Trim(buf, "\x00")
 
@@ -116,23 +94,9 @@ func (p *Proxy) newClient(conn net.Conn) {
 			}
 
 			_, err = target.Write(buf)
-			if _, ok := err.(net.Error); ok {
-				closeConnection(target, p.Logging)
-
-				return
-			} else {
-				check(err)
-			}
+			check(err)
 		}
 	}
-}
-
-func closeConnection(conn net.Conn, logging bool) {
-	if logging {
-		log.Println(conn.RemoteAddr(), "close connection")
-	}
-
-	conn.Close()
 }
 
 func check(err error) {

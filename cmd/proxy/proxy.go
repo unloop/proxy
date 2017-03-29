@@ -30,6 +30,11 @@ func main() {
 			Name:  "l, log",
 			Usage: "enable logging",
 		},
+
+		cli.Int64Flag{
+			Name:  "b, buf",
+			Usage: "set buffer size",
+		},
 	}
 
 	app.Action = func(c *cli.Context) {
@@ -39,6 +44,7 @@ func main() {
 				To:       c.String("t"),
 				Logging:  c.Bool("l"),
 				Password: []byte(c.String("p")),
+				BufSize:  c.Int64("b"),
 			}
 			server := proxy.NewProxyServer(cfg)
 

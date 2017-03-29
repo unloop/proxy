@@ -1,11 +1,11 @@
 # Simple TCP proxy server
-Simple TCP proxy server written in Go (Golang) with logging and password
+Simple TCP proxy server with logging and password
 
 ## Usage
 ### CLI
 #### Start proxy server
 ```
-$ go run proxy.go --from :3333 -to :9999
+$ go run proxy.go --from :3333 --to :9999
 ```
 #### Start proxy server with logging and password
 ```
