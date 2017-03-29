@@ -3,8 +3,8 @@ package main
 import (
 	"github.com/lavrs/proxy"
 	"github.com/urfave/cli"
-	"os"
 	"log"
+	"os"
 )
 
 func main() {
@@ -49,11 +49,9 @@ func main() {
 				Password: []byte(c.String("p")),
 				BufSize:  c.Int64("b"),
 			}
-			server, err := proxy.NewProxyServer(cfg)
-			check(err)
+			server := proxy.NewProxyServer(cfg)
 
-			err = server.Start()
-			check(err)
+			server.Start()
 		} else {
 			err = cli.ShowAppHelp(c)
 			check(err)

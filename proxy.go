@@ -3,10 +3,10 @@ package proxy
 import (
 	"bytes"
 	"crypto/sha1"
+	"io"
 	"log"
 	"net"
-	"errors"
-	"io"
+	"regexp"
 )
 
 type Proxy struct {
@@ -17,11 +17,13 @@ type Proxy struct {
 	started  bool
 }
 
-func NewProxyServer(cfg Proxy) (*Proxy, error) {
+func NewProxyServer(cfg Proxy) *Proxy {
 	var bs []byte
 
-	if (len(cfg.From) == 0) || (len(cfg.To) == 0) {
-		return nil, errors.New("error set port")
+	r, err := regexp.Compile(":[\\d]{4}")
+	check(err)
+	if !r.MatchString(cfg.From) || (!r.MatchString(cfg.To)) {
+		log.Panic("incorrect ports")
 	}
 
 	if len(cfg.Password) != 0 {
@@ -40,12 +42,12 @@ func NewProxyServer(cfg Proxy) (*Proxy, error) {
 		Logging:  cfg.Logging,
 		Password: bs,
 		BufSize:  cfg.BufSize,
-	}, nil
+	}
 }
 
-func (p *Proxy) Start() error {
+func (p *Proxy) Start() {
 	if p.started {
-		return errors.New("proxy server already started")
+		log.Panic("proxy server already started")
 	}
 
 	p.started = true
@@ -59,11 +61,11 @@ func (p *Proxy) Start() error {
 			if conn, err := listen.Accept(); err == nil {
 				go p.nClient(conn)
 			} else {
-				return errors.New("error listen.Accept")
+				log.Panic("error listen.Accept")
 			}
 		}
 	} else {
-		return errors.New("error to start listen")
+		log.Panic("error to start listen")
 	}
 }
 
