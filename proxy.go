@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"log"
 	"net"
+	"errors"
 )
 
 type Proxy struct {
@@ -12,6 +13,7 @@ type Proxy struct {
 	Logging  bool
 	Password []byte
 	BufSize  int64
+	started  bool
 }
 
 func NewProxyServer(cfg Proxy) *Proxy {
@@ -32,6 +34,12 @@ func NewProxyServer(cfg Proxy) *Proxy {
 }
 
 func (p *Proxy) Start() error {
+	if p.started {
+		return errors.New("proxy server already started")
+	}
+
+	p.started = true
+
 	listen, err := net.Listen("tcp", p.From)
 	check(err)
 
