@@ -1,12 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
-	"fmt"
 )
 
 func main() {
@@ -35,6 +35,6 @@ func main() {
 	}()
 
 	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+
 	<-ch
-	conn.Close()
 }

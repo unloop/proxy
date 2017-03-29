@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"regexp"
+	"os"
 )
 
 type Proxy struct {
@@ -33,7 +34,7 @@ func NewProxyServer(cfg Proxy) *Proxy {
 	}
 
 	if cfg.BufSize == 0 {
-		cfg.BufSize = 10240
+		cfg.BufSize = 256
 	}
 
 	return &Proxy{
@@ -53,19 +54,19 @@ func (p *Proxy) Start() {
 	p.started = true
 
 	listen, err := net.Listen("tcp", p.From)
-	defer listen.Close()
-	if err == nil {
-		p.pLog("starting the server on port " + p.From[1:] + " forwarding to " + p.To[1:])
-
-		for {
-			if conn, err := listen.Accept(); err == nil {
-				go p.nClient(conn)
-			} else {
-				log.Panic("error listen Accept")
-			}
-		}
-	} else {
+	if err != nil {
 		log.Panic("error to start listen")
+	}
+	defer listen.Close()
+
+	p.pLog("starting the server on port " + p.From[1:] + " forwarding to " + p.To[1:])
+
+	for {
+		if conn, err := listen.Accept(); err == nil {
+			go p.nClient(conn)
+		} else {
+			log.Panic("error accept listen")
+		}
 	}
 }
 
@@ -75,13 +76,16 @@ func (p *Proxy) nClient(conn net.Conn) {
 	buf := make([]byte, p.BufSize)
 
 	if len(p.Password) != 0 {
-		if n, err := conn.Read(buf); (err == nil) && (n > 0) {
+		if n, err := conn.Read(buf); err == nil && n > 0 {
 			bs := encode(bytes.Trim(buf, "\x00"))
 
 			if !bytes.Equal(bs, p.Password) {
 				p.incorrectPass(conn)
 				return
 			}
+
+			_, err = conn.Write([]byte("authorized"))
+			check(err)
 		} else {
 			p.incorrectPass(conn)
 			return
@@ -103,15 +107,14 @@ func (p *Proxy) nClient(conn net.Conn) {
 
 		n, err := conn.Read(buf)
 		if err != nil {
-			if err == io.EOF {
+			_, ok := err.(net.Error)
+			if err == io.EOF || ok {
 				p.pLog("client " + conn.RemoteAddr().String() + " close connection")
 				return
 			} else {
 				check(err)
 			}
 		}
-
-		buf = bytes.Trim(buf, "\x00")
 
 		if n > 0 {
 			p.pLog(
