@@ -4,9 +4,12 @@ import (
 	"github.com/lavrs/proxy"
 	"github.com/urfave/cli"
 	"os"
+	"log"
 )
 
 func main() {
+	var err error
+
 	app := cli.NewApp()
 	app.Usage = "TCP proxy server"
 
@@ -46,13 +49,23 @@ func main() {
 				Password: []byte(c.String("p")),
 				BufSize:  c.Int64("b"),
 			}
-			server := proxy.NewProxyServer(cfg)
+			server, err := proxy.NewProxyServer(cfg)
+			check(err)
 
-			server.Start()
+			err = server.Start()
+			check(err)
 		} else {
-			cli.ShowAppHelp(c)
+			err = cli.ShowAppHelp(c)
+			check(err)
 		}
 	}
 
-	app.Run(os.Args)
+	err = app.Run(os.Args)
+	check(err)
+}
+
+func check(err error) {
+	if err != nil {
+		log.Panic(err)
+	}
 }

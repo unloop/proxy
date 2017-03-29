@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"errors"
+	"io"
 )
 
 type Proxy struct {
@@ -16,8 +17,12 @@ type Proxy struct {
 	started  bool
 }
 
-func NewProxyServer(cfg Proxy) *Proxy {
+func NewProxyServer(cfg Proxy) (*Proxy, error) {
 	var bs []byte
+
+	if (len(cfg.From) == 0) || (len(cfg.To) == 0) {
+		return nil, errors.New("error set port")
+	}
 
 	if len(cfg.Password) != 0 {
 		bs = encode(cfg.Password)
@@ -25,12 +30,17 @@ func NewProxyServer(cfg Proxy) *Proxy {
 		bs = cfg.Password
 	}
 
+	if cfg.BufSize == 0 {
+		cfg.BufSize = 10240
+	}
+
 	return &Proxy{
 		From:     cfg.From,
 		To:       cfg.To,
 		Logging:  cfg.Logging,
 		Password: bs,
-	}
+		BufSize:  cfg.BufSize,
+	}, nil
 }
 
 func (p *Proxy) Start() error {
@@ -40,70 +50,75 @@ func (p *Proxy) Start() error {
 
 	p.started = true
 
-	listen, err := net.Listen("tcp", p.From)
-	check(err)
+	if listen, err := net.Listen("tcp", p.From); err == nil {
+		defer listen.Close()
 
-	if p.Logging {
-		log.Println("Starting the server on port", p.From[1:], "forwarding to", p.To[1:])
-	}
+		p.pLog("starting the server on port " + p.From[1:] + " forwarding to " + p.To[1:])
 
-	for {
-		conn, err := listen.Accept()
-		check(err)
-
-		go p.newClient(conn)
+		for {
+			if conn, err := listen.Accept(); err == nil {
+				go p.nClient(conn)
+			} else {
+				return errors.New("error listen.Accept")
+			}
+		}
+	} else {
+		return errors.New("error to start listen")
 	}
 }
 
-func (p *Proxy) newClient(conn net.Conn) {
+func (p *Proxy) nClient(conn net.Conn) {
+	defer conn.Close()
+
 	buf := make([]byte, p.BufSize)
 
 	if len(p.Password) != 0 {
-		n, err := conn.Read(buf)
-		check(err)
-
-		if n > 0 {
+		if n, err := conn.Read(buf); (err == nil) && (n > 0) {
 			bs := encode(bytes.Trim(buf, "\x00"))
 
 			if !bytes.Equal(bs, p.Password) {
-				incorrectPass(conn)
-
+				p.incorrectPass(conn)
 				return
 			}
 		} else {
-			incorrectPass(conn)
-
+			p.incorrectPass(conn)
 			return
 		}
 	}
 
-	if p.Logging {
-		log.Println("New client", conn.RemoteAddr())
-	}
+	p.pLog("new client " + conn.RemoteAddr().String())
 
-	target, err := net.Dial("tcp", p.To)
-	check(err)
+	if target, err := net.Dial("tcp", p.To); err == nil {
+		defer target.Close()
 
-	for {
-		buf = make([]byte, p.BufSize)
+		for {
+			buf = make([]byte, p.BufSize)
 
-		n, err := conn.Read(buf)
-		check(err)
-
-		buf = bytes.Trim(buf, "\x00")
-
-		if n > 0 {
-			if p.Logging {
-				log.Print(
-					"Message ", string(bytes.Trim(buf, "\x00")),
-					" received from ", conn.RemoteAddr(),
-					" forwarded to ", target.RemoteAddr(),
-				)
+			n, err := conn.Read(buf)
+			if err != nil {
+				if err == io.EOF {
+					p.pLog("client " + conn.RemoteAddr().String() + " close connection")
+					return
+				} else {
+					check(err)
+				}
 			}
 
-			_, err = target.Write(buf)
-			check(err)
+			buf = bytes.Trim(buf, "\x00")
+
+			if n > 0 {
+				p.pLog(
+					"message " + string(bytes.Trim(buf, "\x00")) +
+						" received from " + conn.RemoteAddr().String() +
+						" forwarded to " + target.RemoteAddr().String(),
+				)
+
+				_, err = target.Write(buf)
+				check(err)
+			}
 		}
+	} else {
+		log.Panic("error to start dial connection")
 	}
 }
 
@@ -113,11 +128,17 @@ func check(err error) {
 	}
 }
 
-func incorrectPass(conn net.Conn) {
+func (p *Proxy) incorrectPass(conn net.Conn) {
 	_, err := conn.Write([]byte("Incorrect password, connection close"))
 	check(err)
 
-	conn.Close()
+	p.pLog(conn.RemoteAddr().String() + "send incorrect address")
+}
+
+func (p *Proxy) pLog(l string) {
+	if p.Logging {
+		log.Println(l)
+	}
 }
 
 func encode(pass []byte) []byte {
