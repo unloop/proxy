@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"regexp"
-	"os"
 )
 
 type Proxy struct {
@@ -53,16 +52,16 @@ func (p *Proxy) Start() {
 
 	p.started = true
 
-	listen, err := net.Listen("tcp", p.From)
+	ln, err := net.Listen("tcp", p.From)
 	if err != nil {
 		log.Panic("error to start listen")
 	}
-	defer listen.Close()
+	defer ln.Close()
 
-	p.pLog("starting the server on port " + p.From[1:] + " forwarding to " + p.To[1:])
+	p.pLog("starting proxy on port " + p.From[1:] + " forwarding to " + p.To[1:])
 
 	for {
-		if conn, err := listen.Accept(); err == nil {
+		if conn, err := ln.Accept(); err == nil {
 			go p.nClient(conn)
 		} else {
 			log.Panic("error accept listen")
@@ -86,13 +85,15 @@ func (p *Proxy) nClient(conn net.Conn) {
 
 			_, err = conn.Write([]byte("authorized"))
 			check(err)
+
+			p.pLog(conn.RemoteAddr().String() + " authorized: OK")
 		} else {
 			p.incorrectPass(conn)
 			return
 		}
+	} else {
+		p.pLog("new client " + conn.RemoteAddr().String())
 	}
-
-	p.pLog("new client " + conn.RemoteAddr().String())
 
 	target, err := net.Dial("tcp", p.To)
 	if err != nil {
