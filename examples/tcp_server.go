@@ -32,9 +32,7 @@ func main() {
 			} else {
 				log.Fatal(err)
 			}
-		}
-
-		if n > 0 {
+		} else if n > 0 {
 			log.Println("message " + string(bytes.Trim(buf, "\x00")))
 		}
 	}

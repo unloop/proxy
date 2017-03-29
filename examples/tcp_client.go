@@ -1,19 +1,20 @@
 package main
 
 import (
-	"bufio"
-	"fmt"
 	"log"
 	"net"
 	"os"
 	"os/signal"
 	"syscall"
+	"fmt"
 )
 
 func main() {
-	var conn net.Conn
-	var err error
-
+	var (
+		conn net.Conn
+		err  error
+		buf  string
+	)
 	ch := make(chan os.Signal)
 
 	go func() {
@@ -23,14 +24,13 @@ func main() {
 		}
 
 		for {
-			reader := bufio.NewReader(os.Stdin)
-			fmt.Print("text to send: ")
-			text, _, err := reader.ReadLine()
+			fmt.Print("text: ")
+			fmt.Scanln(&buf)
+
+			_, err = conn.Write([]byte(buf))
 			if err != nil {
 				log.Panic(err)
 			}
-
-			conn.Write([]byte(text))
 		}
 	}()
 
