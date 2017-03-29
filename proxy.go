@@ -23,7 +23,7 @@ func NewProxyServer(cfg Proxy) *Proxy {
 	r, err := regexp.Compile(":[\\d]{4}")
 	check(err)
 	if !r.MatchString(cfg.From) || (!r.MatchString(cfg.To)) {
-		log.Panic("incorrect ports")
+		log.Fatal("incorrect ports")
 	}
 
 	if len(cfg.Password) != 0 {
@@ -52,16 +52,16 @@ func (p *Proxy) Start() {
 
 	p.started = true
 
-	if listen, err := net.Listen("tcp", p.From); err == nil {
-		defer listen.Close()
-
+	listen, err := net.Listen("tcp", p.From)
+	defer listen.Close()
+	if err == nil {
 		p.pLog("starting the server on port " + p.From[1:] + " forwarding to " + p.To[1:])
 
 		for {
 			if conn, err := listen.Accept(); err == nil {
 				go p.nClient(conn)
 			} else {
-				log.Panic("error listen.Accept")
+				log.Panic("error listen Accept")
 			}
 		}
 	} else {
@@ -90,37 +90,39 @@ func (p *Proxy) nClient(conn net.Conn) {
 
 	p.pLog("new client " + conn.RemoteAddr().String())
 
-	if target, err := net.Dial("tcp", p.To); err == nil {
-		defer target.Close()
+	target, err := net.Dial("tcp", p.To)
+	if err != nil {
+		p.pLog("error to start dial connection to " + p.To)
+		conn.Close()
+		return
+	}
+	defer target.Close()
 
-		for {
-			buf = make([]byte, p.BufSize)
+	for {
+		buf = make([]byte, p.BufSize)
 
-			n, err := conn.Read(buf)
-			if err != nil {
-				if err == io.EOF {
-					p.pLog("client " + conn.RemoteAddr().String() + " close connection")
-					return
-				} else {
-					check(err)
-				}
-			}
-
-			buf = bytes.Trim(buf, "\x00")
-
-			if n > 0 {
-				p.pLog(
-					"message " + string(bytes.Trim(buf, "\x00")) +
-						" received from " + conn.RemoteAddr().String() +
-						" forwarded to " + target.RemoteAddr().String(),
-				)
-
-				_, err = target.Write(buf)
+		n, err := conn.Read(buf)
+		if err != nil {
+			if err == io.EOF {
+				p.pLog("client " + conn.RemoteAddr().String() + " close connection")
+				return
+			} else {
 				check(err)
 			}
 		}
-	} else {
-		log.Panic("error to start dial connection")
+
+		buf = bytes.Trim(buf, "\x00")
+
+		if n > 0 {
+			p.pLog(
+				"message " + string(bytes.Trim(buf, "\x00")) +
+					" received from " + conn.RemoteAddr().String() +
+					" forwarded to " + target.RemoteAddr().String(),
+			)
+
+			_, err = target.Write(buf)
+			check(err)
+		}
 	}
 }
 

@@ -54,15 +54,13 @@ func main() {
 			server.Start()
 		} else {
 			err = cli.ShowAppHelp(c)
-			check(err)
+			if err != nil {
+				log.Panic(err)
+			}
 		}
 	}
 
 	err = app.Run(os.Args)
-	check(err)
-}
-
-func check(err error) {
 	if err != nil {
 		log.Panic(err)
 	}
