@@ -3,6 +3,7 @@ package proxy
 import (
 	"bytes"
 	"crypto/sha1"
+	"errors"
 	"io"
 	"log"
 	"net"
@@ -13,21 +14,20 @@ type Proxy struct {
 	From, To string
 	Logging  bool
 	Password []byte
-	BufSize  int64
 	started  bool
 	ln       net.Listener
 	target   net.Conn
 	conns    []net.Conn
-	quit     chan bool
+	close    chan bool
 }
 
-func NewProxyServer(cfg Proxy) *Proxy {
+func NewProxyServer(cfg Proxy) (*Proxy, error) {
 	var bs []byte
 
 	r, err := regexp.Compile(":[\\d]{4}")
 	check(err)
 	if !r.MatchString(cfg.From) || (!r.MatchString(cfg.To)) {
-		log.Fatal("incorrect ports")
+		return nil, errors.New("entered incorrect ports")
 	}
 
 	if len(cfg.Password) != 0 {
@@ -36,23 +36,19 @@ func NewProxyServer(cfg Proxy) *Proxy {
 		bs = cfg.Password
 	}
 
-	if cfg.BufSize == 0 {
-		cfg.BufSize = 256
-	}
-
 	return &Proxy{
 		From:     cfg.From,
 		To:       cfg.To,
 		Logging:  cfg.Logging,
 		Password: bs,
-		BufSize:  cfg.BufSize,
-		quit:     make(chan bool, 1),
-	}
+		close:    make(chan bool, 1),
+		started:  false,
+	}, nil
 }
 
-func (p *Proxy) Start() {
+func (p *Proxy) Start() error {
 	if p.started {
-		log.Panic("proxy server already started")
+		return errors.New("proxy server already started")
 	}
 
 	p.started = true
@@ -61,11 +57,11 @@ func (p *Proxy) Start() {
 
 	p.ln, err = net.Listen("tcp", p.From)
 	if err != nil {
-		log.Panic(err)
+		return errors.New("error listening: " + err.Error())
 	}
 	defer p.ln.Close()
 
-	p.pLog("starting proxy on port " + p.From[1:] + " forwarding to " + p.To[1:])
+	p.pLog("starting proxy on port " + p.From[1:] + " forwarding to " + p.To[1:] + "\n")
 
 	for {
 		if conn, err := p.ln.Accept(); err == nil {
@@ -74,12 +70,12 @@ func (p *Proxy) Start() {
 			p.conns = append(p.conns, conn)
 		} else {
 			select {
-			case <-p.quit:
-				return
+			case <-p.close:
+				return nil
 			default:
 			}
 
-			log.Panic("error accept listen")
+			return errors.New("error accepting: " + err.Error())
 		}
 	}
 }
@@ -87,7 +83,7 @@ func (p *Proxy) Start() {
 func (p *Proxy) nClient(conn net.Conn) {
 	defer conn.Close()
 
-	buf := make([]byte, p.BufSize)
+	buf := make([]byte, 256)
 
 	if len(p.Password) != 0 {
 		if n, err := conn.Read(buf); err == nil && n > 0 {
@@ -101,79 +97,68 @@ func (p *Proxy) nClient(conn net.Conn) {
 			_, err = conn.Write([]byte("authorized"))
 			check(err)
 
-			p.pLog(conn.RemoteAddr().String() + " authorized: OK")
+			p.pLog(conn.RemoteAddr().String() + ": authorized status: OK")
 		} else {
 			p.incorrectPass(conn)
 			return
 		}
-	} else {
-		p.pLog("new client " + conn.RemoteAddr().String())
 	}
 
 	var err error
 
 	p.target, err = net.Dial("tcp", p.To)
-	if err != nil {
-		p.pLog("error to start dial connection to " + p.To)
-		conn.Close()
-		return
-	}
+	check(err)
 	defer p.target.Close()
 
+	p.pLog("new client: " + conn.RemoteAddr().String() + " connecting to: " + p.target.RemoteAddr().String())
+
 	for {
-		buf = make([]byte, p.BufSize)
+		_, err = io.Copy(p.target, conn)
 
-		n, err := conn.Read(buf)
-		if err != nil {
-			_, ok := err.(net.Error)
-			if err == io.EOF || ok {
-				p.pLog("client " + conn.RemoteAddr().String() + " close connection")
-				return
-			} else {
-				check(err)
-			}
-		}
-
-		if n > 0 {
-			p.pLog(
-				"message \"" + string(bytes.Trim(buf, "\x00")) +
-					"\" received from " + conn.RemoteAddr().String() +
-					" forwarded to " + p.target.RemoteAddr().String(),
-			)
-
-			_, err = p.target.Write(buf)
+		_, ok := err.(net.Error)
+		if !ok {
 			check(err)
 		}
+
+		p.pLog("client: " + conn.RemoteAddr().String() +
+			" lose connection with: " + p.target.RemoteAddr().String())
+
+		return
 	}
 }
 
 func (p *Proxy) Close() {
-	close(p.quit)
+	close(p.close)
 
 	p.ln.Close()
+
+	if p.target != nil {
+		p.target.Close()
+	}
+
 	for _, conn := range p.conns {
 		conn.Close()
 	}
 
-	p.pLog("close proxy with all connections")
+	p.pLog("сlosing all connections")
 }
 
 func check(err error) {
 	if err != nil {
-		log.Panic(err)
+		log.Fatal(err)
 	}
 }
 
 func (p *Proxy) incorrectPass(conn net.Conn) {
-	_, err := conn.Write([]byte("Incorrect password, connection close"))
+	_, err := conn.Write([]byte("incorrect password, connection close"))
 	check(err)
 
-	p.pLog(conn.RemoteAddr().String() + " incorrect pass")
+	p.pLog(conn.RemoteAddr().String() + " authorized status: FAIL")
 }
 
-func (p *Proxy) pLog(l string) {
+func (p *Proxy) pLog(pLog string) {
 	if p.Logging {
-		log.Println(l)
+		log.Println(pLog)
 	}
 }
 

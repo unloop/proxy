@@ -1,12 +1,22 @@
 package main
 
-import "github.com/lavrs/proxy"
+import (
+	"github.com/lavrs/proxy"
+	"log"
+)
 
 func main() {
-	server := proxy.NewProxyServer(proxy.Proxy{
+	server, err := proxy.NewProxyServer(proxy.Proxy{
 		From:    ":3000",
 		To:      ":5000",
 		Logging: true,
 	})
-	server.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	err = server.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
 }

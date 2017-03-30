@@ -15,26 +15,28 @@ func main() {
 		err  error
 		buf  string
 	)
-	ch := make(chan os.Signal)
+	pending := make(chan os.Signal)
 
 	go func() {
 		conn, err = net.Dial("tcp", ":3000")
 		if err != nil {
-			log.Panic(err)
+			log.Fatal(err)
 		}
+		defer conn.Close()
 
 		for {
-			fmt.Print("text: ")
+			fmt.Print("send message: ")
 			fmt.Scanln(&buf)
 
 			_, err = conn.Write([]byte(buf))
 			if err != nil {
-				log.Panic(err)
+				log.Fatal(err)
 			}
 		}
 	}()
 
-	signal.Notify(ch, syscall.SIGINT, syscall.SIGTERM)
+	signal.Notify(pending, syscall.SIGINT, syscall.SIGTERM)
+	<-pending
 
-	<-ch
+	conn.Close()
 }

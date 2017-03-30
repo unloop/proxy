@@ -1,5 +1,5 @@
-# TCP proxy server
-TCP proxy server
+# TCP proxy
+Simple TCP proxy server written in Go (Golang) with logging and password
 ## Usage
 ### CLI
 ```
@@ -20,7 +20,6 @@ GLOBAL OPTIONS:
    -t value, --to value    set proxy server redirect port
    -p value, --pass value  set proxy server password
    -l, --log               enable logging
-   -b value, --buf value   set buffer size (default: 256)
    --help, -h              show help
    --version, -v           print the version
 ```
@@ -32,15 +31,24 @@ $ go run proxy.go -f :3000 -t :5000
 ```go
 package main
 
-import "github.com/lavrs/proxy"
+import (
+	"github.com/lavrs/proxy"
+	"log"
+)
 
 func main() {
-	server := proxy.NewProxyServer(proxy.Proxy{
+	server, err := proxy.NewProxyServer(proxy.Proxy{
 		From:    ":3000",
 		To:      ":5000",
 		Logging: true,
 	})
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	server.Start()
+	err = server.Start()
+	if err != nil {
+		log.Fatal(err)
+	}
 }
 ```

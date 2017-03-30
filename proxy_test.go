@@ -19,16 +19,14 @@ const (
 
 func server(t *testing.T) {
 	ln, err := net.Listen(connType, serverPort)
-	assert.Nil(t, err)
 	defer ln.Close()
 
 	conn, err := ln.Accept()
-	assert.Nil(t, err)
 	defer conn.Close()
 
 	buf := make([]byte, bufSize)
 	_, err = conn.Read(buf)
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 
 	assert.Equal(t, testMsg, string(bytes.Trim(buf, "\x00")))
 }
@@ -36,101 +34,147 @@ func server(t *testing.T) {
 func TestDefault(t *testing.T) {
 	go func() {
 		conn, err := net.Dial(connType, proxyPort)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		defer conn.Close()
 
 		_, err = conn.Write([]byte(testMsg))
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}()
 
-	var proxy *Proxy
+	var (
+		proxy *Proxy
+		err   error
+	)
 
 	go func() {
-		proxy = NewProxyServer(Proxy{
-			From:    proxyPort,
-			To:      serverPort,
-			Logging: true,
+		proxy, err = NewProxyServer(Proxy{
+			From: proxyPort,
+			To:   serverPort,
 		})
-		proxy.Start()
+		assert.NoError(t, err)
+
+		err = proxy.Start()
+		assert.NoError(t, err)
 	}()
 
 	go server(t)
 
-	func(){
-		time.Sleep(time.Second)
-		proxy.Close()
-	}()
+	time.Sleep(time.Second)
+	proxy.Close()
 }
 
 func TestCorrectPass(t *testing.T) {
 	go func() {
 		conn, err := net.Dial(connType, proxyPort)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		defer conn.Close()
 
 		_, err = conn.Write([]byte(pass))
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		buf := make([]byte, bufSize)
 		_, err = conn.Read(buf)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		assert.Equal(t, "authorized", string(bytes.Trim(buf, "\x00")))
 
 		_, err = conn.Write([]byte(testMsg))
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	}()
 
-	var proxy *Proxy
+	var (
+		proxy *Proxy
+		err   error
+	)
 
 	go func() {
-		proxy = NewProxyServer(Proxy{
+		proxy, err = NewProxyServer(Proxy{
 			From:     proxyPort,
 			To:       serverPort,
-			Logging:  true,
 			Password: []byte(pass),
 		})
-		proxy.Start()
+		assert.NoError(t, err)
+
+		err = proxy.Start()
+		assert.NoError(t, err)
 	}()
 
 	go server(t)
 
-	func(){
-		time.Sleep(time.Second)
-		proxy.Close()
-	}()
+	time.Sleep(time.Second)
+	proxy.Close()
 }
 
 func TestIncorrectPass(t *testing.T) {
 	go func() {
 		conn, err := net.Dial(connType, proxyPort)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 		defer conn.Close()
 
 		_, err = conn.Write([]byte("incorrect pass"))
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
 		buf := make([]byte, bufSize)
 		_, err = conn.Read(buf)
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 
-		assert.Equal(t, "Incorrect password, connection close", string(bytes.Trim(buf, "\x00")))
+		assert.Equal(t, "incorrect password, connection close", string(bytes.Trim(buf, "\x00")))
 	}()
 
-	var proxy *Proxy
+	var (
+		proxy *Proxy
+		err   error
+	)
 
 	go func() {
-		proxy = NewProxyServer(Proxy{
+		proxy, err = NewProxyServer(Proxy{
 			From:     proxyPort,
 			To:       serverPort,
-			Logging:  true,
 			Password: []byte(pass),
 		})
-		proxy.Start()
+		assert.NoError(t, err)
+
+		err = proxy.Start()
+		assert.NoError(t, err)
 	}()
 
-	func(){
-		time.Sleep(time.Second)
-		proxy.Close()
+	time.Sleep(time.Second)
+	proxy.Close()
+}
+
+func TestAlreadyStarted(t *testing.T) {
+	var (
+		proxy *Proxy
+		err   error
+	)
+	pending := make(chan bool, 1)
+
+	go func() {
+		proxy, err = NewProxyServer(Proxy{
+			From: proxyPort,
+			To:   serverPort,
+		})
+		assert.NoError(t, err)
+
+		close(pending)
+
+		err = proxy.Start()
+		assert.NoError(t, err)
 	}()
+
+	<-pending
+	err = proxy.Start()
+	assert.EqualError(t, err, "proxy server already started")
+
+	time.Sleep(time.Second)
+	proxy.Close()
+}
+
+func TestIncorrectPorts(t *testing.T) {
+	_, err := NewProxyServer(Proxy{
+		From: "incorrect ports",
+		To:   "incorrect ports",
+	})
+
+	assert.EqualError(t, err, "entered incorrect ports")
 }

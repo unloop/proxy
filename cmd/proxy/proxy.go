@@ -34,11 +34,6 @@ func main() {
 			Name:  "l, log",
 			Usage: "enable logging",
 		},
-
-		cli.Int64Flag{
-			Name:  "b, buf",
-			Usage: "set buffer size",
-		},
 	}
 
 	app.Action = func(c *cli.Context) {
@@ -48,21 +43,26 @@ func main() {
 				To:       c.String("t"),
 				Logging:  c.Bool("l"),
 				Password: []byte(c.String("p")),
-				BufSize:  c.Int64("b"),
 			}
-			server := proxy.NewProxyServer(cfg)
+			server, err := proxy.NewProxyServer(cfg)
+			if err != nil {
+				log.Fatal(err)
+			}
 
-			server.Start()
+			err = server.Start()
+			if err != nil {
+				log.Fatal(err)
+			}
 		} else {
 			err = cli.ShowAppHelp(c)
 			if err != nil {
-				log.Panic(err)
+				log.Fatal(err)
 			}
 		}
 	}
 
 	err = app.Run(os.Args)
 	if err != nil {
-		log.Panic(err)
+		log.Fatal(err)
 	}
 }
