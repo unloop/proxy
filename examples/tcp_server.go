@@ -10,7 +10,7 @@ import (
 func main() {
 	log.Println("launching server..")
 
-	ln, err := net.Listen("tcp", ":9999")
+	ln, err := net.Listen("tcp", ":5000")
 	if err != nil {
 		log.Panic(err)
 	}

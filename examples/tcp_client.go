@@ -18,7 +18,7 @@ func main() {
 	ch := make(chan os.Signal)
 
 	go func() {
-		conn, err = net.Dial("tcp", ":3333")
+		conn, err = net.Dial("tcp", ":3000")
 		if err != nil {
 			log.Panic(err)
 		}

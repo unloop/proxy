@@ -32,22 +32,55 @@ func server(t *testing.T) {
 	assert.Equal(t, testMsg, string(bytes.Trim(buf, "\x00")))
 }
 
-func client(t *testing.T) {
-	conn, err := net.Dial(connType, proxyPort)
-	assert.Nil(t, err)
-	defer conn.Close()
+func TestDefault(t *testing.T) {
+	go func() {
+		conn, err := net.Dial(connType, proxyPort)
+		assert.Nil(t, err)
+		defer conn.Close()
 
-	_, err = conn.Write([]byte(testMsg))
-	assert.Nil(t, err)
-}
+		_, err = conn.Write([]byte(testMsg))
+		assert.Nil(t, err)
+	}()
 
-func TestProxyDefault(t *testing.T) {
-	go client(t)
+	var proxy *Proxy
 
 	go func() {
 		cfg := Proxy{
 			From: proxyPort,
 			To:   serverPort,
+		}
+		proxy = NewProxyServer(cfg)
+
+		proxy.Start()
+	}()
+
+	server(t)
+}
+
+func TestCorrectPass(t *testing.T) {
+	go func() {
+		conn, err := net.Dial(connType, proxyPort)
+		assert.Nil(t, err)
+		defer conn.Close()
+
+		_, err = conn.Write([]byte(pass))
+		assert.Nil(t, err)
+
+		buf := make([]byte, bufSize)
+		_, err = conn.Read(buf)
+		assert.Nil(t, err)
+
+		assert.Equal(t, "authorized", string(bytes.Trim(buf, "\x00")))
+
+		_, err = conn.Write([]byte(testMsg))
+		assert.Nil(t, err)
+	}()
+
+	go func() {
+		cfg := Proxy{
+			From:     proxyPort,
+			To:       serverPort,
+			Password: []byte(pass),
 		}
 		server := NewProxyServer(cfg)
 
@@ -55,4 +88,30 @@ func TestProxyDefault(t *testing.T) {
 	}()
 
 	server(t)
+}
+
+func TestIncorrectPass(t *testing.T) {
+	go func() {
+		conn, err := net.Dial(connType, proxyPort)
+		assert.Nil(t, err)
+		defer conn.Close()
+
+		_, err = conn.Write([]byte("lal"))
+		assert.Nil(t, err)
+
+		buf := make([]byte, bufSize)
+		_, err = conn.Read(buf)
+		assert.Nil(t, err)
+
+		assert.Equal(t, "authorized", string(bytes.Trim(buf, "\x00")))
+	}()
+
+	cfg := Proxy{
+		From:     proxyPort,
+		To:       serverPort,
+		Password: []byte(pass),
+	}
+	server := NewProxyServer(cfg)
+
+	server.Start()
 }

@@ -140,7 +140,7 @@ func (p *Proxy) incorrectPass(conn net.Conn) {
 	_, err := conn.Write([]byte("Incorrect password, connection close"))
 	check(err)
 
-	p.pLog(conn.RemoteAddr().String() + "send incorrect address")
+	p.pLog(conn.RemoteAddr().String() + " incorrect pass")
 }
 
 func (p *Proxy) pLog(l string) {
