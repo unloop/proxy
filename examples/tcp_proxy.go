@@ -8,6 +8,5 @@ func main() {
 		To:      ":5000",
 		Logging: true,
 	})
-
 	server.Start()
 }

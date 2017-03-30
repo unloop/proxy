@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
+	"time"
 )
 
 const (
@@ -45,16 +46,20 @@ func TestDefault(t *testing.T) {
 	var proxy *Proxy
 
 	go func() {
-		cfg := Proxy{
-			From: proxyPort,
-			To:   serverPort,
-		}
-		proxy = NewProxyServer(cfg)
-
+		proxy = NewProxyServer(Proxy{
+			From:    proxyPort,
+			To:      serverPort,
+			Logging: true,
+		})
 		proxy.Start()
 	}()
 
-	server(t)
+	go server(t)
+
+	func(){
+		time.Sleep(time.Second)
+		proxy.Close()
+	}()
 }
 
 func TestCorrectPass(t *testing.T) {
@@ -76,18 +81,24 @@ func TestCorrectPass(t *testing.T) {
 		assert.Nil(t, err)
 	}()
 
+	var proxy *Proxy
+
 	go func() {
-		cfg := Proxy{
+		proxy = NewProxyServer(Proxy{
 			From:     proxyPort,
 			To:       serverPort,
+			Logging:  true,
 			Password: []byte(pass),
-		}
-		server := NewProxyServer(cfg)
-
-		server.Start()
+		})
+		proxy.Start()
 	}()
 
-	server(t)
+	go server(t)
+
+	func(){
+		time.Sleep(time.Second)
+		proxy.Close()
+	}()
 }
 
 func TestIncorrectPass(t *testing.T) {
@@ -96,22 +107,30 @@ func TestIncorrectPass(t *testing.T) {
 		assert.Nil(t, err)
 		defer conn.Close()
 
-		_, err = conn.Write([]byte("lal"))
+		_, err = conn.Write([]byte("incorrect pass"))
 		assert.Nil(t, err)
 
 		buf := make([]byte, bufSize)
 		_, err = conn.Read(buf)
 		assert.Nil(t, err)
 
-		assert.Equal(t, "authorized", string(bytes.Trim(buf, "\x00")))
+		assert.Equal(t, "Incorrect password, connection close", string(bytes.Trim(buf, "\x00")))
 	}()
 
-	cfg := Proxy{
-		From:     proxyPort,
-		To:       serverPort,
-		Password: []byte(pass),
-	}
-	server := NewProxyServer(cfg)
+	var proxy *Proxy
 
-	server.Start()
+	go func() {
+		proxy = NewProxyServer(Proxy{
+			From:     proxyPort,
+			To:       serverPort,
+			Logging:  true,
+			Password: []byte(pass),
+		})
+		proxy.Start()
+	}()
+
+	func(){
+		time.Sleep(time.Second)
+		proxy.Close()
+	}()
 }

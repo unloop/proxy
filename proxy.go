@@ -15,6 +15,10 @@ type Proxy struct {
 	Password []byte
 	BufSize  int64
 	started  bool
+	ln       net.Listener
+	target   net.Conn
+	conns    []net.Conn
+	quit     chan bool
 }
 
 func NewProxyServer(cfg Proxy) *Proxy {
@@ -42,6 +46,7 @@ func NewProxyServer(cfg Proxy) *Proxy {
 		Logging:  cfg.Logging,
 		Password: bs,
 		BufSize:  cfg.BufSize,
+		quit:     make(chan bool, 1),
 	}
 }
 
@@ -52,18 +57,28 @@ func (p *Proxy) Start() {
 
 	p.started = true
 
-	ln, err := net.Listen("tcp", p.From)
+	var err error
+
+	p.ln, err = net.Listen("tcp", p.From)
 	if err != nil {
-		log.Panic("error to start listen")
+		log.Panic(err)
 	}
-	defer ln.Close()
+	defer p.ln.Close()
 
 	p.pLog("starting proxy on port " + p.From[1:] + " forwarding to " + p.To[1:])
 
 	for {
-		if conn, err := ln.Accept(); err == nil {
+		if conn, err := p.ln.Accept(); err == nil {
 			go p.nClient(conn)
+
+			p.conns = append(p.conns, conn)
 		} else {
+			select {
+			case <-p.quit:
+				return
+			default:
+			}
+
 			log.Panic("error accept listen")
 		}
 	}
@@ -95,13 +110,15 @@ func (p *Proxy) nClient(conn net.Conn) {
 		p.pLog("new client " + conn.RemoteAddr().String())
 	}
 
-	target, err := net.Dial("tcp", p.To)
+	var err error
+
+	p.target, err = net.Dial("tcp", p.To)
 	if err != nil {
 		p.pLog("error to start dial connection to " + p.To)
 		conn.Close()
 		return
 	}
-	defer target.Close()
+	defer p.target.Close()
 
 	for {
 		buf = make([]byte, p.BufSize)
@@ -119,15 +136,26 @@ func (p *Proxy) nClient(conn net.Conn) {
 
 		if n > 0 {
 			p.pLog(
-				"message " + string(bytes.Trim(buf, "\x00")) +
-					" received from " + conn.RemoteAddr().String() +
-					" forwarded to " + target.RemoteAddr().String(),
+				"message \"" + string(bytes.Trim(buf, "\x00")) +
+					"\" received from " + conn.RemoteAddr().String() +
+					" forwarded to " + p.target.RemoteAddr().String(),
 			)
 
-			_, err = target.Write(buf)
+			_, err = p.target.Write(buf)
 			check(err)
 		}
 	}
+}
+
+func (p *Proxy) Close() {
+	close(p.quit)
+
+	p.ln.Close()
+	for _, conn := range p.conns {
+		conn.Close()
+	}
+
+	p.pLog("close proxy with all connections")
 }
 
 func check(err error) {
