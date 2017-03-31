@@ -73,9 +73,8 @@ func (p *Proxy) Start() error {
 			case <-p.close:
 				return nil
 			default:
+				return errors.New("error accepting: " + err.Error())
 			}
-
-			return errors.New("error accepting: " + err.Error())
 		}
 	}
 }

@@ -43,9 +43,8 @@ func main() {
 							if err == io.EOF {
 								log.Println("lost connection to:", conn.RemoteAddr())
 								return
-							} else {
-								log.Fatal(err)
 							}
+							log.Fatal(err)
 						} else if n > 0 {
 							log.Println("new message: \""+string(bytes.Trim(buf, "\x00"))+
 								"\" from:", conn.RemoteAddr().String())
