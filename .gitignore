@@ -2,3 +2,4 @@
 *.exe
 *.exe~
 *.bat
+coverage.out

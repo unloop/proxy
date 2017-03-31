@@ -39,10 +39,10 @@ func main() {
 	app.Action = func(c *cli.Context) {
 		if c.NArg() == 0 {
 			cfg := proxy.Proxy{
-				From:     c.String("f"),
-				To:       c.String("t"),
-				Logging:  c.Bool("l"),
-				Password: []byte(c.String("p")),
+				From:    c.String("f"),
+				To:      c.String("t"),
+				Logging: c.Bool("l"),
+				Auth:    []byte(c.String("p")),
 			}
 			server, err := proxy.NewProxyServer(cfg)
 			if err != nil {

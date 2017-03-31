@@ -13,7 +13,7 @@ import (
 type Proxy struct {
 	From, To string
 	Logging  bool
-	Password []byte
+	Auth     []byte
 	started  bool
 	ln       net.Listener
 	target   net.Conn
@@ -30,19 +30,19 @@ func NewProxyServer(cfg Proxy) (*Proxy, error) {
 		return nil, errors.New("entered incorrect ports")
 	}
 
-	if len(cfg.Password) != 0 {
-		bs = encode(cfg.Password)
+	if len(cfg.Auth) != 0 {
+		bs = encode(cfg.Auth)
 	} else {
-		bs = cfg.Password
+		bs = cfg.Auth
 	}
 
 	return &Proxy{
-		From:     cfg.From,
-		To:       cfg.To,
-		Logging:  cfg.Logging,
-		Password: bs,
-		close:    make(chan bool, 1),
-		started:  false,
+		From:    cfg.From,
+		To:      cfg.To,
+		Logging: cfg.Logging,
+		Auth:    bs,
+		close:   make(chan bool, 1),
+		started: false,
 	}, nil
 }
 
@@ -85,11 +85,11 @@ func (p *Proxy) nClient(conn net.Conn) {
 
 	buf := make([]byte, 256)
 
-	if len(p.Password) != 0 {
+	if len(p.Auth) != 0 {
 		if n, err := conn.Read(buf); err == nil && n > 0 {
 			bs := encode(bytes.Trim(buf, "\x00"))
 
-			if !bytes.Equal(bs, p.Password) {
+			if !bytes.Equal(bs, p.Auth) {
 				p.incorrectPass(conn)
 				return
 			}

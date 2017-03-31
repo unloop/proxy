@@ -89,9 +89,9 @@ func TestCorrectPass(t *testing.T) {
 
 	go func() {
 		proxy, err = NewProxyServer(Proxy{
-			From:     proxyPort,
-			To:       serverPort,
-			Password: []byte(pass),
+			From: proxyPort,
+			To:   serverPort,
+			Auth: []byte(pass),
 		})
 		assert.NoError(t, err)
 
@@ -128,9 +128,9 @@ func TestIncorrectPass(t *testing.T) {
 
 	go func() {
 		proxy, err = NewProxyServer(Proxy{
-			From:     proxyPort,
-			To:       serverPort,
-			Password: []byte(pass),
+			From: proxyPort,
+			To:   serverPort,
+			Auth: []byte(pass),
 		})
 		assert.NoError(t, err)
 
