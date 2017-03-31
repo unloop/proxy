@@ -1,13 +1,13 @@
 # TCP proxy
-Simple TCP proxy server written in Go (Golang) with logging and password
+Simple TCP proxy server written in Go (Golang) with logging and auth
 ## Usage
 ### CLI
 ```
 NAME:
-   proxy.go - TCP proxy server
+   proxy.exe - TCP proxy server
 
 USAGE:
-   proxy.go [global options] command [command options] [arguments...]
+   proxy.exe [global options] command [command options] [arguments...]
 
 VERSION:
    0.1.0
@@ -18,14 +18,14 @@ COMMANDS:
 GLOBAL OPTIONS:
    -f value, --from value  set proxy server port
    -t value, --to value    set proxy server redirect port
-   -p value, --pass value  set proxy server password
+   -a value, --auth value  set proxy server auth token
    -l, --log               enable logging
    --help, -h              show help
    --version, -v           print the version
 ```
 ##### Start proxy server
 ```
-$ go run proxy.go -f :3000 -t :5000
+$ go run proxy.go -l -f :3000 -t :5000
 ```
 ### GO
 ```go

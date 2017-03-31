@@ -13,7 +13,7 @@ import (
 type Proxy struct {
 	From, To string
 	Logging  bool
-	Auth     []byte
+	Token    []byte
 	started  bool
 	ln       net.Listener
 	target   net.Conn
@@ -30,17 +30,17 @@ func NewProxyServer(cfg Proxy) (*Proxy, error) {
 		return nil, errors.New("entered incorrect ports")
 	}
 
-	if len(cfg.Auth) != 0 {
-		bs = encode(cfg.Auth)
+	if len(cfg.Token) != 0 {
+		bs = encode(cfg.Token)
 	} else {
-		bs = cfg.Auth
+		bs = cfg.Token
 	}
 
 	return &Proxy{
 		From:    cfg.From,
 		To:      cfg.To,
 		Logging: cfg.Logging,
-		Auth:    bs,
+		Token:   bs,
 		close:   make(chan bool, 1),
 		started: false,
 	}, nil
@@ -84,12 +84,12 @@ func (p *Proxy) nClient(conn net.Conn) {
 
 	buf := make([]byte, 256)
 
-	if len(p.Auth) != 0 {
+	if len(p.Token) != 0 {
 		if n, err := conn.Read(buf); err == nil && n > 0 {
 			bs := encode(bytes.Trim(buf, "\x00"))
 
-			if !bytes.Equal(bs, p.Auth) {
-				p.incorrectPass(conn)
+			if !bytes.Equal(bs, p.Token) {
+				p.authFail(conn)
 				return
 			}
 
@@ -98,7 +98,7 @@ func (p *Proxy) nClient(conn net.Conn) {
 
 			p.pLog(conn.RemoteAddr().String() + ": authorized status: OK")
 		} else {
-			p.incorrectPass(conn)
+			p.authFail(conn)
 			return
 		}
 	}
@@ -127,9 +127,13 @@ func (p *Proxy) nClient(conn net.Conn) {
 }
 
 func (p *Proxy) Close() {
+	p.started = false
+
 	close(p.close)
 
-	p.ln.Close()
+	if p.ln != nil {
+		p.ln.Close()
+	}
 
 	if p.target != nil {
 		p.target.Close()
@@ -148,8 +152,8 @@ func check(err error) {
 	}
 }
 
-func (p *Proxy) incorrectPass(conn net.Conn) {
-	_, err := conn.Write([]byte("incorrect password, connection close"))
+func (p *Proxy) authFail(conn net.Conn) {
+	_, err := conn.Write([]byte("auth fail: connection close"))
 	check(err)
 
 	p.pLog(conn.RemoteAddr().String() + " authorized status: FAIL")
@@ -161,9 +165,9 @@ func (p *Proxy) pLog(pLog string) {
 	}
 }
 
-func encode(pass []byte) []byte {
+func encode(token []byte) []byte {
 	h := sha1.New()
-	h.Write(pass)
+	h.Write(token)
 	bs := h.Sum(nil)
 
 	return bs

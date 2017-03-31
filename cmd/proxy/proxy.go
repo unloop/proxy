@@ -26,8 +26,8 @@ func main() {
 		},
 
 		cli.StringFlag{
-			Name:  "p, pass",
-			Usage: "set proxy server password",
+			Name:  "a, auth",
+			Usage: "set proxy server auth token",
 		},
 
 		cli.BoolFlag{
@@ -42,7 +42,7 @@ func main() {
 				From:    c.String("f"),
 				To:      c.String("t"),
 				Logging: c.Bool("l"),
-				Auth:    []byte(c.String("p")),
+				Token:   []byte(c.String("a")),
 			}
 			server, err := proxy.NewProxyServer(cfg)
 			if err != nil {
