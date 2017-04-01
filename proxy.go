@@ -27,7 +27,7 @@ func NewProxyServer(cfg Proxy) (*Proxy, error) {
 	r, err := regexp.Compile(":[\\d]{4}")
 	check(err)
 	if !r.MatchString(cfg.From) || (!r.MatchString(cfg.To)) {
-		return nil, errors.New("entered incorrect ports")
+		return nil, errors.New("entered incorrect port")
 	}
 
 	if len(cfg.Token) != 0 {
